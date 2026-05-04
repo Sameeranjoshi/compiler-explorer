@@ -47,6 +47,22 @@ import {getPossibleGccToolchainsFromCompilerInfo} from './toolchain-utils.js';
 
 const sleep = promisify(setTimeout);
 
+function expandEnvPlaceholders(value: string): string {
+    return value.replace(/\$\{env:([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}/g, (_match, envName, _defaultPart, fallback) => {
+        const envValue = process.env[envName];
+        if (envValue !== undefined && envValue !== '') return envValue;
+        return fallback ?? '';
+    });
+}
+
+function expandPathPlaceholders(value: string, replacements: Record<string, string>): string {
+    let expanded = expandEnvPlaceholders(value);
+    for (const [key, replacement] of Object.entries(replacements)) {
+        expanded = expanded.replaceAll('${' + key + '}', replacement);
+    }
+    return expanded === '' ? '' : path.normalize(expanded);
+}
+
 /***
  * Finds and initializes the compilers stored on the properties files
  */
@@ -212,8 +228,7 @@ export class CompilerFinder {
         const group = props('group', '');
 
         const demanglerProp = props('demangler', '');
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: This is an intentional placeholder replaced at runtime
-        const demangler = demanglerProp ? path.normalize(demanglerProp.replace('${ceToolsPath}', ceToolsPath)) : '';
+        const demangler = demanglerProp ? expandPathPlaceholders(demanglerProp, {ceToolsPath}) : '';
 
         const isSemVer = props('isSemVer', false);
         const baseName = props<string | undefined>('baseName');
@@ -243,7 +258,7 @@ export class CompilerFinder {
             }
             return arr;
         })();
-        const exe = props('exe', compilerId);
+        const exe = expandPathPlaceholders(props('exe', compilerId), {ceToolsPath});
         const exePath = path.dirname(exe);
         const instructionSet = props<string | number>('instructionSet', '').toString() as InstructionSet | '';
         assert(
@@ -267,11 +282,11 @@ export class CompilerFinder {
             demangler: demangler,
             demanglerType: props('demanglerType', ''),
             demanglerArgs: splitArrayPropsOrEmpty('demanglerArgs', '|'),
-            nvdisasm: props('nvdisasm', ''),
-            objdumper: props('objdumper', ''),
+            nvdisasm: expandPathPlaceholders(props('nvdisasm', ''), {ceToolsPath, exePath}),
+            objdumper: expandPathPlaceholders(props('objdumper', ''), {ceToolsPath, exePath}),
             objdumperType: props('objdumperType', ''),
             objdumperArgs: splitArrayPropsOrEmpty('objdumperArgs', '|'),
-            llvmObjdumper: props('llvmObjdumper', ''),
+            llvmObjdumper: expandPathPlaceholders(props('llvmObjdumper', ''), {ceToolsPath, exePath}),
             intelAsm: props('intelAsm', ''),
             supportsAsmDocs: props('supportsAsmDocs', true),
             instructionSet: instructionSet === '' ? null : instructionSet,
@@ -291,24 +306,21 @@ export class CompilerFinder {
             group: group,
             groupName: props('groupName', ''),
             includeFlag: props('includeFlag', '-isystem'),
-            includePath: props('includePath', ''),
+            includePath: expandPathPlaceholders(props('includePath', ''), {ceToolsPath, exePath}),
             linkFlag: props('linkFlag', '-l'),
             rpathFlag: props('rpathFlag', '-Wl,-rpath,'),
             libpathFlag: props('libpathFlag', '-L'),
             libPath: props('libPath', '')
                 .split(path.delimiter)
                 .filter(p => p !== '')
-                // biome-ignore lint/suspicious/noTemplateCurlyInString: This is an intentional placeholder replaced at runtime
-                .map(x => path.normalize(x.replace('${exePath}', exePath))),
+                .map(x => expandPathPlaceholders(x, {ceToolsPath, exePath})),
             ldPath: props('ldPath', '')
                 .split('|')
-                // biome-ignore lint/suspicious/noTemplateCurlyInString: This is an intentional placeholder replaced at runtime
-                .map(x => path.normalize(x.replace('${exePath}', exePath))),
+                .map(x => expandPathPlaceholders(x, {ceToolsPath, exePath})),
             extraPath: props('extraPath', '')
                 .split(path.delimiter)
                 .filter(p => p !== '')
-                // biome-ignore lint/suspicious/noTemplateCurlyInString: This is an intentional placeholder replaced at runtime
-                .map(x => path.normalize(x.replace('${exePath}', exePath))),
+                .map(x => expandPathPlaceholders(x, {ceToolsPath, exePath})),
             envVars: envVars,
             notification: props('notification', ''),
             isSemVer: isSemVer,
@@ -332,7 +344,7 @@ export class CompilerFinder {
             },
             externalparser: {
                 id: props('externalparser', ''),
-                exe: props('externalparser.exe', ''),
+                exe: expandPathPlaceholders(props('externalparser.exe', ''), {ceToolsPath, exePath}),
                 args: props('externalparser.args', ''),
             },
             license: {

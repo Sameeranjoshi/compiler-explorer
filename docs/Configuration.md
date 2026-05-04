@@ -208,6 +208,12 @@ Some properties support variable substitution to make configuration more flexibl
    demangler=${ceToolsPath}/demangler
    ```
 
+3. **${env:NAME}** or **${env:NAME:-fallback}**: Replaced with an environment variable, with an optional fallback
+   ```
+   compiler.myclang.exe=${env:MY_TOOLCHAIN_ROOT}/bin/clang++
+   compiler.air.exe=${env:AIR_TOOLS_ROOT:-/opt/air}/bin/air-opt
+   ```
+
 ### Special Properties for Environment Variables
 
 Environment variables can be configured using a special format:

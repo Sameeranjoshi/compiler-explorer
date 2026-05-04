@@ -24,6 +24,8 @@
 
 import './utils.js';
 
+import path from 'node:path';
+
 import {beforeAll, describe, expect, it} from 'vitest';
 
 import {CompilerFinder} from '../lib/compiler-finder.js';
@@ -85,6 +87,12 @@ const bothOptions = {
     options: 'bar',
 };
 
+const envBasedExe = {
+    compilers: 'goodCompiler',
+    exe: '${env:CE_TEST_COMPILER_ROOT:-/tmp/compiler-root}/bin/compiler',
+    libPath: '${exePath}/../lib',
+};
+
 const supportsLibrariesOptions = {
     compilers: 'goodCompiler',
     supportsLibraries: 'fmt:catch2.2101',
@@ -97,6 +105,7 @@ describe('Compiler-finder', () => {
     let noBaseOptionsProps: properties.CompilerProps;
     let onlyBaseOptionsProps: properties.CompilerProps;
     let bothOptionsProps: properties.CompilerProps;
+    let envBasedExeProps: properties.CompilerProps;
     let libraryCompilerProps: properties.CompilerProps;
 
     let optionsHandler: ClientOptionsHandler;
@@ -108,6 +117,7 @@ describe('Compiler-finder', () => {
         noBaseOptionsProps = new properties.CompilerProps(languages, properties.fakeProps(noBaseOptions));
         onlyBaseOptionsProps = new properties.CompilerProps(languages, properties.fakeProps(onlyBaseOptions));
         bothOptionsProps = new properties.CompilerProps(languages, properties.fakeProps(bothOptions));
+        envBasedExeProps = new properties.CompilerProps(languages, properties.fakeProps(envBasedExe));
 
         libraryCompilerProps = new properties.CompilerProps(languages, properties.fakeProps(supportsLibrariesOptions));
 
@@ -148,6 +158,21 @@ describe('Compiler-finder', () => {
         const finder = new CompilerFinder({} as any, bothOptionsProps, {} as any, optionsHandler);
         const compilers = await finder.getCompilers();
         expect(compilers[0].options).toEqual('foo bar');
+    });
+
+    it('should expand environment variables in compiler executable paths', async () => {
+        const oldEnv = process.env.CE_TEST_COMPILER_ROOT;
+        process.env.CE_TEST_COMPILER_ROOT = '/opt/ce-tools';
+
+        try {
+            const finder = new CompilerFinder({} as any, envBasedExeProps, {} as any, optionsHandler);
+            const compilers = await finder.getCompilers();
+            expect(compilers[0].exe).toEqual(path.normalize('/opt/ce-tools/bin/compiler'));
+            expect(compilers[0].libPath).toEqual([path.normalize('/opt/ce-tools/lib')]);
+        } finally {
+            if (oldEnv === undefined) delete process.env.CE_TEST_COMPILER_ROOT;
+            else process.env.CE_TEST_COMPILER_ROOT = oldEnv;
+        }
     });
 
     it('should be able to filter libraries', async () => {
